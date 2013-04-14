@@ -1,0 +1,93 @@
+package com.bergerlavy.boleposerver;
+
+import java.io.IOException;
+import java.io.PrintWriter;
+
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import com.google.appengine.api.datastore.DatastoreService;
+import com.google.appengine.api.datastore.DatastoreServiceFactory;
+import com.google.appengine.api.datastore.Entity;
+import com.google.appengine.api.datastore.FetchOptions;
+import com.google.appengine.api.datastore.PreparedQuery;
+import com.google.appengine.api.datastore.Query;
+import com.google.appengine.api.datastore.Query.Filter;
+import com.google.appengine.api.datastore.Query.FilterPredicate;
+
+@SuppressWarnings("serial")
+public class GcmServlet extends HttpServlet {
+
+	private DatastoreService mDatastore;
+
+	@Override
+	protected void doPost(HttpServletRequest req, HttpServletResponse resp)
+			throws ServletException, IOException {
+
+		mDatastore = DatastoreServiceFactory.getDatastoreService();
+		
+		Boolean status = false;
+		String responseStr = "";
+		/* retrieving the data attached to the HTTP request */
+		String username = req.getParameter("user");
+		String regid = req.getParameter("gcmid");
+		String action = req.getParameter("action");
+
+		if (action != null) {
+
+			/* checking whether the requested action is to register to the GCM service */
+			if (action.equalsIgnoreCase("gcm_register")) {
+
+				/* the data must be not null in order to store it in the database */
+				if (username != null && regid != null) {
+
+					Entity user = new Entity("User");
+					user.setProperty("name", username);
+					user.setProperty("gcmid", regid);
+					mDatastore.put(user);
+					status = true;
+				}
+				else {
+					responseStr = "username or regid is null";
+				}
+			}
+			else if (action.equalsIgnoreCase("gcm_unregister")) {
+
+				/* the data must be not null in order to store it in the database */
+				if (username != null && regid != null) {
+
+					Filter regIdFilter = new FilterPredicate("gcmid", Query.FilterOperator.EQUAL, regid);
+					Query regIdQry = new Query("User").setFilter(regIdFilter);
+
+					PreparedQuery pq = mDatastore.prepare(regIdQry);
+					Entity usr = pq.asList(FetchOptions.Builder.withLimit(1)).get(0);
+
+					if (username.equalsIgnoreCase((String) usr.getProperty("name"))) {
+						mDatastore.delete(usr.getKey());	
+						status = true;
+					}
+				}
+				else {
+					responseStr = "username or regid is null";
+				}
+			}
+			else {
+				responseStr = "unknown action";
+			}
+		}
+		else {
+			responseStr = "action is null";
+		}
+		
+		resp.setContentType("text/xml");
+		PrintWriter out = resp.getWriter();
+		out.println("<?xml version=\"1.0\"?>");
+		out.println("<GcmResponse>");
+		out.println("<Action>" + action + "</Action>");
+		out.println("<State>" + (status?"OK":"Error") + "</State>");
+		out.println("<Desc>" + responseStr + "</Desc>");
+		out.println("</GcmResponse>");
+	}
+}

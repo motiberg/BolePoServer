@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?><web-app xmlns="http://java.sun.com/xml/ns/javaee" xmlns:web="http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.5" xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd">
+
+	<!-- Servlets -->
+	<servlet>
+		<servlet-name>Meetings</servlet-name>
+		<servlet-class>com.bergerlavy.boleposerver.MeetingsServlet</servlet-class>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>Meetings</servlet-name>
+		<url-pattern>/meetings</url-pattern>
+	</servlet-mapping>
+
+	<servlet>
+		<servlet-name>GPS</servlet-name>
+		<servlet-class>com.bergerlavy.boleposerver.GpsServlet</servlet-class>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>GPS</servlet-name>
+		<url-pattern>/gps</url-pattern>
+	</servlet-mapping>
+
+	<servlet>
+		<servlet-name>GCM</servlet-name>
+		<servlet-class>com.bergerlavy.boleposerver.GcmServlet</servlet-class>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>GCM</servlet-name>
+		<url-pattern>/gcm</url-pattern>
+	</servlet-mapping>
+
+	<servlet>
+		<servlet-name>SystemServiceServlet</servlet-name>
+		<servlet-class>com.google.api.server.spi.SystemServiceServlet</servlet-class>
+		<init-param>
+			<param-name>services</param-name>
+			<param-value/>
+		</init-param>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>SystemServiceServlet</servlet-name>
+		<url-pattern>/_ah/spi/*</url-pattern>
+	</servlet-mapping>
+
+</web-app>
