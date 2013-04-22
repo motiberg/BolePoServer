@@ -31,7 +31,7 @@ public class GcmServlet extends HttpServlet {
 		Boolean status = false;
 		String responseStr = "";
 		/* retrieving the data attached to the HTTP request */
-		String username = req.getParameter("user");
+		String phone = req.getParameter("userphone");
 		String regid = req.getParameter("gcmid");
 		String action = req.getParameter("action");
 
@@ -41,10 +41,10 @@ public class GcmServlet extends HttpServlet {
 			if (action.equalsIgnoreCase("gcm_register")) {
 
 				/* the data must be not null in order to store it in the database */
-				if (username != null && regid != null) {
+				if (phone != null && regid != null) {
 
 					Entity user = new Entity("User");
-					user.setProperty("name", username);
+					user.setProperty("phone", phone);
 					user.setProperty("gcmid", regid);
 					mDatastore.put(user);
 					status = true;
@@ -56,7 +56,7 @@ public class GcmServlet extends HttpServlet {
 			else if (action.equalsIgnoreCase("gcm_unregister")) {
 
 				/* the data must be not null in order to store it in the database */
-				if (username != null && regid != null) {
+				if (phone != null && regid != null) {
 
 					Filter regIdFilter = new FilterPredicate("gcmid", Query.FilterOperator.EQUAL, regid);
 					Query regIdQry = new Query("User").setFilter(regIdFilter);
@@ -64,7 +64,7 @@ public class GcmServlet extends HttpServlet {
 					PreparedQuery pq = mDatastore.prepare(regIdQry);
 					Entity usr = pq.asList(FetchOptions.Builder.withLimit(1)).get(0);
 
-					if (username.equalsIgnoreCase((String) usr.getProperty("name"))) {
+					if (phone.equalsIgnoreCase((String) usr.getProperty("phone"))) {
 						mDatastore.delete(usr.getKey());	
 						status = true;
 					}

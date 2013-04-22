@@ -24,6 +24,10 @@ import com.google.appengine.api.datastore.Query.Filter;
 import com.google.appengine.api.datastore.Query.FilterOperator;
 import com.google.appengine.api.datastore.Query.FilterPredicate;
 
+/************************************************************************************************/
+/*											TODO LIST											*/
+/************************************************************************************************/
+/* 1. save phone of participant 																*/
 
 @SuppressWarnings("serial")
 public class MeetingsServlet extends HttpServlet {
@@ -85,6 +89,7 @@ public class MeetingsServlet extends HttpServlet {
 		for (Participant p : participants) {
 			participant = new Entity("Participant");
 			participant.setProperty("meetingkey", p.getMeetingID());
+			participant.setProperty("phone", p.getPhone());
 			participant.setProperty("name", p.getName());
 			participant.setProperty("rsvp", p.getRSVP());
 			participant.setProperty("credentials", p.getCredentials());
@@ -116,7 +121,7 @@ public class MeetingsServlet extends HttpServlet {
 			for (Entity pe : pq.asIterable()) {
 				boolean found = false;
 				for (String s : participants) {
-					if (((String) pe.getProperty("name")).equals(s)) {
+					if (((String) pe.getProperty("phone")).equals(s)) {
 						found = true;
 						break;
 					}
@@ -131,7 +136,7 @@ public class MeetingsServlet extends HttpServlet {
 			for (String s : participants) {
 				boolean found = false;
 				for (Entity pe : pq.asIterable()) {
-					if (((String) pe.getProperty("name")).equals(s)) {
+					if (((String) pe.getProperty("phone")).equals(s)) {
 						found = true;
 						break;
 					}
@@ -139,7 +144,8 @@ public class MeetingsServlet extends HttpServlet {
 				if (!found) {
 					Entity participantEntity = new Entity("Participant");
 					participantEntity.setProperty("meetingkey", e.getKey());
-					participantEntity.setProperty("name", s);
+					participantEntity.setProperty("phone", s);
+					participantEntity.setProperty("name", null);
 					participantEntity.setProperty("rsvp", null);
 					participantEntity.setProperty("credentials", null);
 					//					Participant p = new Participant(s, e.getKey(), null, null, null);
@@ -153,18 +159,15 @@ public class MeetingsServlet extends HttpServlet {
 		return e;
 	}
 
-	private int notifyParticipants(List<String> participants, String meetingHash) {
+	private int[] notifyParticipants(List<String> participants, String meetingHash) {
 		List<String> gcmIds = new ArrayList<String>();
-		//		participants.add("0546469478");
 		for (String participant : participants) {
 
-			Filter usrFilter = new FilterPredicate("name", Query.FilterOperator.EQUAL, participant);
+			Filter usrFilter = new FilterPredicate("phone", Query.FilterOperator.EQUAL, participant);
 
 			Query qry = new Query("User").setFilter(usrFilter);
 			PreparedQuery pq = mDatastore.prepare(qry);
 			for (Entity e : pq.asIterable()) {
-				//			List<Entity> userLst = pq.asList(FetchOptions.Builder.withLimit(1));
-
 				if (e.getProperty("gcmid") != null) {
 					gcmIds.add((String) e.getProperty("gcmid"));
 				}
@@ -177,12 +180,12 @@ public class MeetingsServlet extends HttpServlet {
 		try {
 			if (!gcmIds.isEmpty())
 				result = sender.send(message, gcmIds, 5);
-			else return 0;
+			else return null;
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		return result.getSuccess();
+		return new int[] { result.getSuccess(), result.getFailure(), gcmIds.size() };
 
 
 		//
@@ -276,7 +279,6 @@ public class MeetingsServlet extends HttpServlet {
 		String sharelocationtime = null;
 		String participantsnumber = null;
 
-		boolean error = false;
 
 		/* preparing the response in XML format */
 		resp.setContentType("text/xml");
@@ -286,6 +288,7 @@ public class MeetingsServlet extends HttpServlet {
 		List<String> participants = new ArrayList<String>();
 		String action = req.getParameter("action");
 		String actionmaker = req.getParameter("actionmaker");
+		hashval = req.getParameter("hash");
 		if (action.equals("create") || action.equals("modify")) {
 			name = req.getParameter("name");
 			date = req.getParameter("date");
@@ -309,233 +312,249 @@ public class MeetingsServlet extends HttpServlet {
 			for (int i = 0 ; i < participantsNum ; i++) {
 				participants.add(req.getParameter("participant_" + i));
 			}
-		}
-//		if (action.equals("modify"))
-			hashval = req.getParameter("hash");
+		}			
+		try {
 
-		if (!error) {
-			/* using PersistenceManager to store, update, and delete data objects,
-			 * and to perform datastore queries */
+			/* checking whether the user wanted to retrieve an existing meeting's details */
+			if (action.equals("retrieve")) {
 
-			try {
+				Filter hashFilter = new FilterPredicate("hash",
+						Query.FilterOperator.EQUAL,
+						hashval);
 
-				/* checking whether the user wanted to retrieve an existing meeting's details */
-				if (action.equals("retrieve")) {
+				Query retrieveQry = new Query("Meeting").setFilter(hashFilter);
+				PreparedQuery pq = mDatastore.prepare(retrieveQry);
 
-					Filter hashFilter = new FilterPredicate("hash",
-							Query.FilterOperator.EQUAL,
-							hashval);
+				try {
+					/* retrieving the one and only result from the above query */
+					Entity meeting = pq.asSingleEntity();
 
-					Query retrieveQry = new Query("Meeting").setFilter(hashFilter);
-					PreparedQuery pq = mDatastore.prepare(retrieveQry);
-
-					try {
-						/* retrieving the one and only result from the above query */
-						Entity meeting = pq.asSingleEntity();
-
-						out.println("<here>OK</here>");
-						if (meeting != null) {
-							/* checking if the user is the creator or one of the participants */
-							//						if (hasReadingCredentials(actionmaker, meeting)) {
+					out.println("<here>OK</here>");
+					if (meeting != null) {
+						/* checking if the user is the creator or one of the participants */
+						//						if (hasReadingCredentials(actionmaker, meeting)) {
 
 
-							/* setting the request status to be OK */
-							out.println("<Status>");
-							out.println("<Action>" + action + "</Action>");
-							out.println("<State>OK</State>");
-							out.println("<Desc></Desc>");
-							out.println("</Status>");
+						/* setting the request status to be OK */
+						out.println("<Status>");
+						out.println("<Action>" + action + "</Action>");
+						out.println("<State>OK</State>");
+						out.println("<Desc></Desc>");
+						out.println("</Status>");
 
-							/* filling the meeting details */
-							out.println("<Meeting>");
-							out.println("<Creator>" + (String) meeting.getProperty("creator") + "</Creator>");
-							out.println("<Name>" + (String) meeting.getProperty("name") + "</Name>");
-							out.println("<Date>" + (String) meeting.getProperty("date") + "</Date>");
-							out.println("<Time>" + (String) meeting.getProperty("time") + "</Time>");
-							out.println("<Location>" + (String) meeting.getProperty("location") + "</Location>");
-							out.println("<ShareLocationTime>" + (String) meeting.getProperty("sharelocationtime") + "</ShareLocationTime>");
+						/* filling the meeting details */
+						out.println("<Meeting>");
+						out.println("<Creator>" + (String) meeting.getProperty("creator") + "</Creator>");
+						out.println("<Name>" + (String) meeting.getProperty("name") + "</Name>");
+						out.println("<Date>" + (String) meeting.getProperty("date") + "</Date>");
+						out.println("<Time>" + (String) meeting.getProperty("time") + "</Time>");
+						out.println("<Location>" + (String) meeting.getProperty("location") + "</Location>");
+						out.println("<ShareLocationTime>" + (String) meeting.getProperty("sharelocationtime") + "</ShareLocationTime>");
 
-							Key meetingKey = meeting.getKey();
+						Key meetingKey = meeting.getKey();
 
-							Filter meetingIdFltr = new FilterPredicate("meetingid", FilterOperator.EQUAL, meetingKey);
-							Query partsQry = new Query("Participant").setFilter(meetingIdFltr);
+						Filter meetingIdFltr = new FilterPredicate("meetingid", FilterOperator.EQUAL, meetingKey);
+						Query partsQry = new Query("Participant").setFilter(meetingIdFltr);
 
-							PreparedQuery pqParts = mDatastore.prepare(partsQry);
-							out.println("<Participants>");
-							for (Entity e : pqParts.asIterable()) {
-								out.println("<Participant>");
-								out.println("<ParticipantName>" + (String) e.getProperty("name") + "</ParticipantName>");
-								out.println("<RSVP>" + (String) e.getProperty("rsvp") + "</RSVP>");
-								out.println("<Credentials>" + (String) e.getProperty("credentials") + "</Credentials>");
-								out.println("<ParticipantHash>" + (String) e.getProperty("hash") + "</ParticipantHash>");
-								out.println("</Participant>");
-							}
-
-							out.println("</Participants>");
-							out.println("</Meeting>");
-							//						}
+						PreparedQuery pqParts = mDatastore.prepare(partsQry);
+						out.println("<Participants>");
+						for (Entity e : pqParts.asIterable()) {
+							out.println("<Participant>");
+							out.println("<ParticipantName>" + (String) e.getProperty("name") + "</ParticipantName>");
+							out.println("<RSVP>" + (String) e.getProperty("rsvp") + "</RSVP>");
+							out.println("<Credentials>" + (String) e.getProperty("credentials") + "</Credentials>");
+							out.println("<ParticipantHash>" + (String) e.getProperty("hash") + "</ParticipantHash>");
+							out.println("</Participant>");
 						}
-						out.println("<Here>" + hashval + "</Here>");
-					} catch (TooManyResultsException e) {
-						e.printStackTrace();
-					}
 
+						out.println("</Participants>");
+						out.println("</Meeting>");
+						//						}
+					}
+					out.println("<Here>" + hashval + "</Here>");
+				} catch (TooManyResultsException e) {
+					e.printStackTrace();
 				}
 
-				/* checking whether the user wanted to create a new meeting */
-				else if (action.equals("create")) {
-					Key newMeetingKey = storeMeeting(actionmaker, name, date, time, location, participants, sharelocationtime);
+			}
 
-					/* creating a collection of Participant instances from the data received in the HTTP request */
-					List<Participant> participantsList = new ArrayList<Participant>();
-					for (String s : participants) {
+			/* checking whether the user wanted to create a new meeting */
+			else if (action.equals("create")) {
+				Key newMeetingKey = storeMeeting(actionmaker, name, date, time, location, participants, sharelocationtime);
 
-						/* building base participant */
-						Participant.Builder participantBuilder = new Participant.Builder(s, newMeetingKey);
+				/* creating a collection of Participant instances from the data received in the HTTP request */
+				List<Participant> participantsList = new ArrayList<Participant>();
+				for (String s : participants) {
 
-						/* if this participant is the meeting's creator, then he should has special properties */
-						if (actionmaker.equalsIgnoreCase(s))
-							participantsList.add(participantBuilder
-									.setCredentials("root")
-									.setRsvp("yes")
-									.setShareLocationStatus("yes")
-									.build());
-						else participantsList.add(participantBuilder.build());
+					/* building base participant */
+					Participant.Builder participantBuilder = new Participant.Builder(s, newMeetingKey);
+
+					/* if this participant is the meeting's creator, then he should has special properties */
+					if (actionmaker.equalsIgnoreCase(s))
+						participantsList.add(participantBuilder
+								.setCredentials("root")
+								.setRsvp("yes")
+								.setShareLocationStatus("yes")
+								.build());
+					else participantsList.add(participantBuilder.build());
+				}
+
+				storeParticipants(participantsList);
+
+				out.println("<Status>");
+				out.println("<Action>" + action + "</Action>");
+				out.println("<State>OK</State>");
+				out.println("<Desc></Desc>");
+				out.println("</Status>");
+
+				/* sending back the hash calculated on the meeting's details to be used later to check
+				 * integrity of the meeting in actions like retrieve, edit and delete */
+				out.println("<Meeting>");
+				out.println("<MHash>" + mHash + "</MHash>");
+				out.println("<Participants>");
+				for (Participant p : participantsList) {
+					out.println("<Participant>");
+					out.println("<Phone>" + p.getPhone() + "</Phone>");
+					out.println("<Name>" + p.getName() + "</Name>");
+					out.println("<RSVP>" + p.getRSVP() + "</RSVP>");
+					out.println("<Credentials>" + p.getCredentials() + "</Credentials>");
+					out.println("<PHash>" + p.getHash() + "</PHash>");
+					out.println("</Participant>");
+				}
+				out.println("</Participants>");
+				out.println("</Meeting>");
+
+				int r[] = notifyParticipants(participants, mHash);
+				out.println("<Delivered>" + r[0] +  "</Delivered>");
+				out.println("<FailDelivered>" + r[1] +  "</FailDelivered>");
+				out.println("<Total>" + r[2] +  "</Total>");
+				//				if (r != null) {
+				//					if (r.length == 2)
+				//						out.println("<Delivered>" + "Delivered: " + r[0] + "Failed: " + r[1] + "</Delivered>");
+				//					else out.println("<Delivered>" + "error: " + r[0] + "</Delivered>");
+				//				}
+				//				else out.println("<Delivered>" + "null" +  "</Delivered>");
+				mHash = null;
+			}
+			/* checking whether the user wanted to edit an existing meeting */
+			else if (action.equals("modify")) {
+
+				/* looking for a meeting record with hash value equal to the hash value given by the user 
+				 * in the HTTP request */
+
+				Filter hashFilter = new FilterPredicate("hash",
+						Query.FilterOperator.EQUAL,
+						hashval);
+				//
+				Query modifyQry = new Query("Meeting").setFilter(hashFilter);
+				PreparedQuery pq = mDatastore.prepare(modifyQry);
+				////
+				int qryEntityResultCount = 0;
+				for (Entity e : pq.asIterable()) {
+					qryEntityResultCount++;
+				}
+
+				//
+				//					if (qryEntityResultCount == 1) {
+				//
+				/* getting the one and only meeting from datastore */
+				Entity meeting = pq.asList(FetchOptions.Builder.withLimit(1)).get(0);
+				//						//						Meeting meeting = meetings.get(0);
+				//
+				//						/* checking whether the requester has the right credentials to modify the meeting's details */
+				//						if (hasModifyingCredentials(actionmaker, meeting)) {
+				//
+				/* creating new meeting instance with the modified details */
+				Entity modifiedMeeting = modifyAndSave(meeting, actionmaker, name, date, time, location, participants, sharelocationtime);
+
+				/* saving the modified meeting in the datastore */
+
+				/* setting the request status to be OK */
+				out.println("<Status>");
+				out.println("<Action>" + action + "</Action>");
+				out.println("<State>OK</State>");
+				out.println("<Desc>" + qryEntityResultCount + "</Desc>");
+				out.println("</Status>");
+
+				/* sending back the hash calculated on the meeting's details to be used later to check
+				 * integrity of the meeting in actions like retrieve, edit and delete */
+				out.println("<Meeting>");
+				out.println("<Hash>" + modifiedMeeting.getProperty("hash") + "</Hash>");
+				//TODO add here the participants (name, hash) pairs
+				out.println("</Meeting>");
+				//						}
+				//					}
+				//TODO notify about modifying meeting's details
+			}
+			/* checking whether the user wanted to delete an existing meeting */
+			else if (action.equals("remove")) {
+				/* looking for a meeting record with hash value equal to the hash value given by the user 
+				 * in the HTTP request */
+				
+				Filter hashFilter = new FilterPredicate("hash", FilterOperator.EQUAL, hashval);
+				
+				Query deleteQry = new Query("Meeting").setFilter(hashFilter);
+				PreparedQuery pq = mDatastore.prepare(deleteQry);
+				
+				Entity meeting = pq.asSingleEntity();
+				
+//				List<Meeting> meetings = (List<Meeting>) pm.newQuery(buildRetrieveQuery(hashval)).execute();
+
+				if (meeting != null) {
+
+					/* checking whether the requester has the right credentials to modify the meeting's details */
+					if (hasModifyingCredentials(actionmaker, meeting)) {
+						
+						Filter deletedMeetingParticipants = new FilterPredicate("meetingkey", FilterOperator.EQUAL, meeting.getKey());
+						Query deletedParticipantsQry = new Query("Participant").setFilter(deletedMeetingParticipants);
+						pq = mDatastore.prepare(deletedParticipantsQry);
+						List<Entity> participantsToDelete = pq.asList(FetchOptions.Builder.withLimit(1));
+						/* removing participants */
+						for (Entity e : participantsToDelete)
+							mDatastore.delete(e.getKey());
+						
+						/* removing entire meeting */
+						mDatastore.delete(meeting.getKey());
+
+						/* setting the request status to be OK */
+						out.println("<Status>");
+						out.println("<Action>" + action + "</Action>");
+						out.println("<State>OK</State>");
+						out.println("<Desc></Desc>");
+						out.println("</Status>");
 					}
-
-					storeParticipants(participantsList);
-
+					else {
+						/* user doesn't has credentials to perform delete */
+						out.println("<Status>");
+						out.println("<Action>" + action + "</Action>");
+						out.println("<State>Error</State>");
+						out.println("<Desc>no credentials</Desc>");
+						out.println("</Status>");
+					}
+				}
+				else {
+					/* no meeting corresponds to the given hash */
 					out.println("<Status>");
 					out.println("<Action>" + action + "</Action>");
-					out.println("<State>OK</State>");
-					out.println("<Desc></Desc>");
+					out.println("<State>Error</State>");
+					out.println("<Desc>no such a meeting - " + hashval + "</Desc>");
 					out.println("</Status>");
-
-					/* sending back the hash calculated on the meeting's details to be used later to check
-					 * integrity of the meeting in actions like retrieve, edit and delete */
-					out.println("<Meeting>");
-					out.println("<MHash>" + mHash + "</MHash>");
-					out.println("<Participants>");
-					for (Participant p : participantsList) {
-						out.println("<Participant>");
-						out.println("<Name>" + p.getName() + "</Name>");
-						out.println("<RSVP>" + p.getRSVP() + "</RSVP>");
-						out.println("<Credentials>" + p.getCredentials() + "</Credentials>");
-						out.println("<PHash>" + p.getHash() + "</PHash>");
-						out.println("</Participant>");
-					}
-					out.println("</Participants>");
-					out.println("</Meeting>");
-
-					int r = notifyParticipants(participants, mHash);
-					out.println("<Delivered>" + r +  "</Delivered>");
-					//				if (r != null) {
-					//					if (r.length == 2)
-					//						out.println("<Delivered>" + "Delivered: " + r[0] + "Failed: " + r[1] + "</Delivered>");
-					//					else out.println("<Delivered>" + "error: " + r[0] + "</Delivered>");
-					//				}
-					//				else out.println("<Delivered>" + "null" +  "</Delivered>");
-					mHash = null;
 				}
-				/* checking whether the user wanted to edit an existing meeting */
-				else if (action.equals("modify")) {
-
-					/* looking for a meeting record with hash value equal to the hash value given by the user 
-					 * in the HTTP request */
-
-					Filter hashFilter = new FilterPredicate("hash",
-							Query.FilterOperator.EQUAL,
-							hashval);
-					//
-					Query modifyQry = new Query("Meeting").setFilter(hashFilter);
-					PreparedQuery pq = mDatastore.prepare(modifyQry);
-					////
-					int qryEntityResultCount = 0;
-					for (Entity e : pq.asIterable()) {
-						qryEntityResultCount++;
-					}
-
-					//
-					//					if (qryEntityResultCount == 1) {
-					//
-					/* getting the one and only meeting from datastore */
-					Entity meeting = pq.asList(FetchOptions.Builder.withLimit(1)).get(0);
-					//						//						Meeting meeting = meetings.get(0);
-					//
-					//						/* checking whether the requester has the right credentials to modify the meeting's details */
-					//						if (hasModifyingCredentials(actionmaker, meeting)) {
-					//
-					/* creating new meeting instance with the modified details */
-					Entity modifiedMeeting = modifyAndSave(meeting, actionmaker, name, date, time, location, participants, sharelocationtime);
-
-					/* saving the modified meeting in the datastore */
-
-					/* setting the request status to be OK */
-					out.println("<Status>");
-					out.println("<Action>" + action + "</Action>");
-					out.println("<State>OK</State>");
-					out.println("<Desc>" + qryEntityResultCount + "</Desc>");
-					out.println("</Status>");
-
-					/* sending back the hash calculated on the meeting's details to be used later to check
-					 * integrity of the meeting in actions like retrieve, edit and delete */
-					out.println("<Meeting>");
-					out.println("<Hash>" + modifiedMeeting.getProperty("hash") + "</Hash>");
-					//TODO add here the participants (name, hash) pairs
-					out.println("</Meeting>");
-					//						}
-					//					}
-					//TODO notify about modifying meeting's details
-				}
-				//			/* checking whether the user wanted to delete an existing meeting */
-				//			else if (action.equals("delete")) {
-				//				/* looking for a meeting record with hash value equal to the hash value given by the user 
-				//				 * in the HTTP request */
-				//				List<Meeting> meetings = (List<Meeting>) pm.newQuery(buildRetrieveQuery(hashval)).execute();
-				//				
-				//				if (meetings != null && meetings.size() == 1) {
-				//					
-				//					/* getting the one and only meeting from datastore */
-				//					Meeting meeting = meetings.get(0);
-				//					
-				//					/* checking whether the requester has the right credentials to modify the meeting's details */
-				//					if (hasModifyingCredentials(actionmaker, meeting)) {
-				//						pm.deletePersistent(meeting);
-				//						
-				//						/* setting the request status to be OK */
-				//						out.println("<Status>");
-				//						out.println("<Action>" + action + "</Action>");
-				//						out.println("<State>OK</State>");
-				//						out.println("<Desc></Desc>");
-				//						out.println("</Status>");
-				//					}
-				//					else {
-				//						/* user doesn't has credentials to perform delete */
-				//						out.println("<Status>");
-				//						out.println("<Action>" + action + "</Action>");
-				//						out.println("<State>Error</State>");
-				//						out.println("<Desc>no credentials</Desc>");
-				//						out.println("</Status>");
-				//					}
-				//				}
-				//				else {
-				//					/*  */
-				//				}
-				//				//TODO notify about delete
-				//			}
-				//			else {
-				//				out.println("<Status>");
-				//				out.println("<Action>" + action + "</Action>");
-				//				out.println("<State>Error</State>");
-				//				out.println("<Desc>unknown action</Desc>");
-				//				out.println("</Status>");
-				//			}
-				//			out.println("</Response>");
-				out.println("</Response>");
+				//TODO notify about delete
 			}
-			finally {
-				//				pm.close();
-			}
+			//			else {
+			//				out.println("<Status>");
+			//				out.println("<Action>" + action + "</Action>");
+			//				out.println("<State>Error</State>");
+			//				out.println("<Desc>unknown action</Desc>");
+			//				out.println("</Status>");
+			//			}
+			//			out.println("</Response>");
+			out.println("</Response>");
 		}
+		finally {
+			//				pm.close();
+		}
+
 	}
 }

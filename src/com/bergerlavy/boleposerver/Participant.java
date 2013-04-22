@@ -4,6 +4,7 @@ import com.google.appengine.api.datastore.Key;
 
 public class Participant {
 
+	private String phone;
 	private String name;
 	private Key meetingid;
 	private String credentials;
@@ -12,11 +13,16 @@ public class Participant {
 	private String hash;
 
 	private Participant(Builder builder) {
+		this.phone = builder.phone;
 		this.name = builder.name;
 		this.meetingid = builder.meetingid;
 		this.credentials = builder.credentials;
 		this.rsvp = builder.rsvp;
 		this.sharelocationstatus = builder.sharelocationstatus;
+	}
+	
+	public String getPhone() {
+		return phone;
 	}
 	
 	public String getName() {
@@ -50,31 +56,41 @@ public class Participant {
 	public static class Builder {
 		
 		/* Required */
-		private String name;
+		private String phone;
 		private Key meetingid;
 		
 		/* Optional */
+		private String name;
 		private String credentials = "read";
 		private String rsvp = "uknown";
 		private String sharelocationstatus = "yes";
 		
-		public Builder(String name, Key meetingid) {
-			this.name = name;
+		public Builder(String phone, Key meetingid) {
+			this.phone = phone;
 			this.meetingid = meetingid;
 		}
 		
+		public Builder setName(String name) {
+			if (name != null)
+				this.name = name;
+			return this;
+		}
+		
 		public Builder setCredentials(String credentials) {
-			this.credentials = credentials;
+			if (credentials != null)
+				this.credentials = credentials;
 			return this;
 		}
 		
 		public Builder setRsvp(String rsvp) {
-			this.rsvp = rsvp;
+			if (rsvp != null)
+				this.rsvp = rsvp;
 			return this;
 		}
 		
 		public Builder setShareLocationStatus(String sharelocationstatus) {
-			this.sharelocationstatus = sharelocationstatus;
+			if (sharelocationstatus != null)
+				this.sharelocationstatus = sharelocationstatus;
 			return this;
 		}
 		
