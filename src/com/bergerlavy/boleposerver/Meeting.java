@@ -1,19 +1,13 @@
 package com.bergerlavy.boleposerver;
 
-import java.util.ArrayList;
 import java.util.List;
-
-import javax.jdo.annotations.IdGeneratorStrategy;
-import javax.jdo.annotations.PersistenceCapable;
-import javax.jdo.annotations.Persistent;
-import javax.jdo.annotations.PrimaryKey;
 
 import com.google.appengine.api.datastore.Key;
 
 public class Meeting {
 
 	private Key key;
-	private String creator;
+	private String manager;
 	private String purpose;
 	private String date;
 	private String time;
@@ -22,8 +16,8 @@ public class Meeting {
 	private String sharelocationtime;
 	private String hash;
 
-	public Meeting(String creator, String purpose, String date, String time, String location, List<String> participants, String sharelocationtime) {
-		this.creator = creator;
+	public Meeting(String manager, String purpose, String date, String time, String location, List<String> participants, String sharelocationtime) {
+		this.manager = manager;
 		this.purpose = purpose;
 		this.date = date;
 		this.time = time;
@@ -36,8 +30,8 @@ public class Meeting {
 		return key;
 	}
 
-	public String getCreator() {
-		return creator;
+	public String getManager() {
+		return manager;
 	}
 
 	public String getPurpose() {
