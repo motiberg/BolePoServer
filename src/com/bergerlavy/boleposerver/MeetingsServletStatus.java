@@ -32,17 +32,20 @@ public class MeetingsServletStatus {
 		private String description;
 		
 		public Builder setState(String state) {
-			this.state = state;
+			if (state != null)
+				this.state = state;
 			return this;
 		}
 		
 		public Builder setAction(String action) {
-			this.action = action;
+			if (action != null)
+				this.action = action;
 			return this;
 		}
 		
 		public Builder setDescription(String description) {
-			this.description = description;
+			if (description != null)
+				this.description = description;
 			return this;
 		}
 		

@@ -53,6 +53,11 @@ public class Participant {
 		this.hash = hash;
 	}
 	
+	@Override
+	public String toString() {
+		return phone + "::" + name + "::" + credentials + "::" + rsvp + "::" + hash;
+	}
+	
 	public static class Builder {
 		
 		/* Required */
@@ -61,8 +66,8 @@ public class Participant {
 		
 		/* Optional */
 		private String name;
-		private String credentials = "read";
-		private String rsvp = "uknown";
+		private String credentials = BolePoServerConstans.CREDENTIALS.REGULAR.toString();
+		private String rsvp = BolePoServerConstans.RSVP.UNKNOWN.toString();
 		private String sharelocationstatus = "yes";
 		
 		public Builder(String phone, Key meetingid) {
