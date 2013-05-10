@@ -24,8 +24,6 @@ import com.google.appengine.api.datastore.Query;
 import com.google.appengine.api.datastore.Query.Filter;
 import com.google.appengine.api.datastore.Query.FilterOperator;
 import com.google.appengine.api.datastore.Query.FilterPredicate;
-import com.google.gwt.dev.jjs.impl.CodeSplitter2.ParitionHeuristics;
-import com.sun.istack.internal.Builder;
 
 /************************************************************************************************/
 /*											TODO LIST											*/

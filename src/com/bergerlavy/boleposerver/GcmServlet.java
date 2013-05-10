@@ -15,6 +15,7 @@ import com.google.appengine.api.datastore.FetchOptions;
 import com.google.appengine.api.datastore.PreparedQuery;
 import com.google.appengine.api.datastore.Query;
 import com.google.appengine.api.datastore.Query.Filter;
+import com.google.appengine.api.datastore.Query.FilterOperator;
 import com.google.appengine.api.datastore.Query.FilterPredicate;
 
 @SuppressWarnings("serial")
@@ -27,7 +28,7 @@ public class GcmServlet extends HttpServlet {
 			throws ServletException, IOException {
 
 		mDatastore = DatastoreServiceFactory.getDatastoreService();
-		
+
 		Boolean status = false;
 		String responseStr = "";
 		/* retrieving the data attached to the HTTP request */
@@ -43,9 +44,24 @@ public class GcmServlet extends HttpServlet {
 				/* the data must be not null in order to store it in the database */
 				if (phone != null && regid != null) {
 
-					Entity user = new Entity("User");
-					user.setProperty("phone", phone);
-					user.setProperty("gcmid", regid);
+					Entity user = null;
+					Filter usrExists = new FilterPredicate(BolePoServerConstans.DB_TABLE_USER.PHONE.toString(),
+							FilterOperator.EQUAL,
+							phone);
+
+					Query qry = new Query(BolePoServerConstans.DB_TABLE_USER.TABLE_NAME.toString()).setFilter(usrExists);
+					PreparedQuery result = mDatastore.prepare(qry);
+					if (result.asIterable().iterator().hasNext()) {
+						/* updating an existing user */
+						user = result.asSingleEntity();
+						user.setProperty(BolePoServerConstans.DB_TABLE_USER.GCM_ID.toString(), regid);
+					}
+					else {
+						/* creating record for the new user */
+						user = new Entity(BolePoServerConstans.DB_TABLE_USER.TABLE_NAME.toString());
+						user.setProperty(BolePoServerConstans.DB_TABLE_USER.PHONE.toString(), phone);
+						user.setProperty(BolePoServerConstans.DB_TABLE_USER.GCM_ID.toString(), regid);
+					}
 					mDatastore.put(user);
 					status = true;
 				}
@@ -80,7 +96,7 @@ public class GcmServlet extends HttpServlet {
 		else {
 			responseStr = "action is null";
 		}
-		
+
 		resp.setContentType("text/xml");
 		PrintWriter out = resp.getWriter();
 		out.println("<?xml version=\"1.0\"?>");
