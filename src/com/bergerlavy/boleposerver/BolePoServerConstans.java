@@ -162,7 +162,8 @@ public class BolePoServerConstans {
 
 		TABLE_NAME ("User"),
 		PHONE ("phone"),
-		GCM_ID ("gcmid");
+		GCM_ID ("gcmid"),
+		TIME ("time");
 
 		private final String mStr;
 

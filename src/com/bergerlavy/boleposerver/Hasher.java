@@ -9,7 +9,8 @@ public class Hasher {
 	}
 	
 	public static String participantHashGenerator(Participant participant) {
-		return "participant_bla_bla";
+		String uuid = UUID.randomUUID().toString();
+		return "participant_bla_bla" + uuid;
 	}
 
 }

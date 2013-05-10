@@ -2,6 +2,9 @@ package com.bergerlavy.boleposerver;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -55,12 +58,14 @@ public class GcmServlet extends HttpServlet {
 						/* updating an existing user */
 						user = result.asSingleEntity();
 						user.setProperty(BolePoServerConstans.DB_TABLE_USER.GCM_ID.toString(), regid);
+						user.setProperty(BolePoServerConstans.DB_TABLE_USER.TIME.toString(), getLocalTime());
 					}
 					else {
 						/* creating record for the new user */
 						user = new Entity(BolePoServerConstans.DB_TABLE_USER.TABLE_NAME.toString());
 						user.setProperty(BolePoServerConstans.DB_TABLE_USER.PHONE.toString(), phone);
 						user.setProperty(BolePoServerConstans.DB_TABLE_USER.GCM_ID.toString(), regid);
+						user.setProperty(BolePoServerConstans.DB_TABLE_USER.TIME.toString(), getLocalTime());
 					}
 					mDatastore.put(user);
 					status = true;
@@ -105,5 +110,11 @@ public class GcmServlet extends HttpServlet {
 		out.println("<State>" + (status?"OK":"Error") + "</State>");
 		out.println("<Desc>" + responseStr + "</Desc>");
 		out.println("</GcmResponse>");
+	}
+	
+	private String getLocalTime() {
+		DateFormat dateFormat = new SimpleDateFormat("HH:mm:ss dd/MM/yyyy");
+		Date date = new Date();
+		return dateFormat.format(date);
 	}
 }
