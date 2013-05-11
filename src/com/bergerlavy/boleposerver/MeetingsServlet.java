@@ -66,7 +66,7 @@ public class MeetingsServlet extends HttpServlet {
 		String credentials = (String) participantEntity.getProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.CREDENTIALS.toString());
 
 		/* checking if the participant's credentials are of a manager */
-		if (BolePoServerConstans.CREDENTIALS.valueOf(credentials) == BolePoServerConstans.CREDENTIALS.MANAGER)
+		if (BolePoServerConstans.CREDENTIALS.getEnum(credentials) == BolePoServerConstans.CREDENTIALS.MANAGER)
 			return true;
 		return false;
 	}
@@ -82,7 +82,7 @@ public class MeetingsServlet extends HttpServlet {
 		}
 		throw new IllegalArgumentException();
 	}
-	
+
 	private Key storeMeeting(String actionmakerphone, String name, String date, String time, String location, List<String> participants, String sharelocationtime) {
 		/* creating meeting instance with the meeting details as given by the user */
 		Meeting newMeeting = new Meeting(actionmakerphone, name, date, time, location, participants, sharelocationtime);
@@ -119,21 +119,24 @@ public class MeetingsServlet extends HttpServlet {
 			mDatastore.put(participant);
 		}
 	}
-	
+
 	private List<String> updateParticipants(Key meetingKey, List<Participant> participants) {
 		Filter participantsOfMeetingFilter = new FilterPredicate(BolePoServerConstans.DB_TABLE_PARTICIPANT.MEETING_KEY.toString(), FilterOperator.EQUAL, meetingKey);
 		Query qry = new Query(BolePoServerConstans.DB_TABLE_PARTICIPANT.TABLE_NAME.toString()).setFilter(participantsOfMeetingFilter);
 		PreparedQuery results = mDatastore.prepare(qry);
-		
+
 		/* saves the participants that are no longer invited to the meeting with the key that received as a parameter */
 		List<String> oldParticipants = new ArrayList<String>();
-		
-		boolean exists = false;
+
+		boolean exists;
 		/* for every participant, checking if he already invited to the meeting, even after the modification of the meeting */
 		for (Participant p : participants) {
+			exists = false;
 			for (Entity e : results.asIterable()) {
-				if (p.getPhone().equals(e.getProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.PHONE.toString())))
+				if (p.getPhone().equals(e.getProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.PHONE.toString()))) {
 					exists = true;
+					break;
+				}
 			}
 			/* if the participant is new to the meeting, than adding it */
 			if (!exists) {
@@ -146,13 +149,15 @@ public class MeetingsServlet extends HttpServlet {
 				mDatastore.put(entity);
 			}
 		}
-		
-		exists = false;
+
 		/* for every participant that has been exist before the modification, checking if he still invited to the meeting */
 		for (Entity e : results.asIterable()) {
+			exists = false;
 			for (Participant p : participants) {
-				if (p.getPhone().equals(e.getProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.PHONE.toString())))
+				if (p.getPhone().equals(e.getProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.PHONE.toString()))) {
 					exists = true;
+					break;
+				}
 			}
 			/* if the participant is not included in the modified participants list, removing him */
 			if (!exists) {
@@ -176,46 +181,46 @@ public class MeetingsServlet extends HttpServlet {
 		e.setProperty(BolePoServerConstans.DB_TABLE_MEETING.HASH.toString(), meetingHash);
 		mDatastore.put(e);
 
-		//TODO filter for the meeting key
-		Query participantsQry = new Query(BolePoServerConstans.DB_TABLE_PARTICIPANT.TABLE_NAME.toString());
-		PreparedQuery pq = mDatastore.prepare(participantsQry);
-
-		if (participants != null) {
-			for (Entity pe : pq.asIterable()) {
-				boolean found = false;
-				for (String s : participants) {
-					if (((String) pe.getProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.PHONE.toString())).equals(s)) {
-						found = true;
-						break;
-					}
-				}
-				/* if the participant entity name wasn't found in the participants list, that means
-				 * that the participant is no longer invited to the meeting and it must be removed 
-				 * from the database. */
-				if (!found)
-					mDatastore.delete(pe.getKey());
-			}
-
-			for (String s : participants) {
-				boolean found = false;
-				for (Entity pe : pq.asIterable()) {
-					if (((String) pe.getProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.PHONE.toString())).equals(s)) {
-						found = true;
-						break;
-					}
-				}
-				if (!found) {
-					Entity participantEntity = new Entity(BolePoServerConstans.DB_TABLE_PARTICIPANT.TABLE_NAME.toString());
-					participantEntity.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.MEETING_KEY.toString(), e.getKey());
-					participantEntity.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.PHONE.toString(), s);
-					participantEntity.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.NAME.toString(), null);
-					participantEntity.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.RSVP.toString(), null);
-					participantEntity.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.CREDENTIALS.toString(), null);
-					mDatastore.put(participantEntity);
-				}
-			}
-
-		}
+//		//TODO filter for the meeting key
+//		Query participantsQry = new Query(BolePoServerConstans.DB_TABLE_PARTICIPANT.TABLE_NAME.toString());
+//		PreparedQuery pq = mDatastore.prepare(participantsQry);
+//
+//		if (participants != null) {
+//			for (Entity pe : pq.asIterable()) {
+//				boolean found = false;
+//				for (String s : participants) {
+//					if (((String) pe.getProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.PHONE.toString())).equals(s)) {
+//						found = true;
+//						break;
+//					}
+//				}
+//				/* if the participant entity name wasn't found in the participants list, that means
+//				 * that the participant is no longer invited to the meeting and it must be removed 
+//				 * from the database. */
+//				if (!found)
+//					mDatastore.delete(pe.getKey());
+//			}
+//
+//			for (String s : participants) {
+//				boolean found = false;
+//				for (Entity pe : pq.asIterable()) {
+//					if (((String) pe.getProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.PHONE.toString())).equals(s)) {
+//						found = true;
+//						break;
+//					}
+//				}
+//				if (!found) {
+//					Entity participantEntity = new Entity(BolePoServerConstans.DB_TABLE_PARTICIPANT.TABLE_NAME.toString());
+//					participantEntity.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.MEETING_KEY.toString(), e.getKey());
+//					participantEntity.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.PHONE.toString(), s);
+//					participantEntity.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.NAME.toString(), null);
+//					participantEntity.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.RSVP.toString(), null);
+//					participantEntity.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.CREDENTIALS.toString(), null);
+//					mDatastore.put(participantEntity);
+//				}
+//			}
+//
+//		}
 		return e;
 	}
 
@@ -268,7 +273,7 @@ public class MeetingsServlet extends HttpServlet {
 			Query qry = new Query(BolePoServerConstans.DB_TABLE_MEETING.TABLE_NAME.toString()).setFilter(hashFltr);
 			PreparedQuery result = mDatastore.prepare(qry);
 			Entity meeting = result.asSingleEntity();
-			
+			if (meeting == null) return new int[] { -1, -1 ,-1 };
 			messageBuilder.addData(BolePoServerConstans.GCM_DATA.MEETING_NAME.toString(), (String) meeting.getProperty(BolePoServerConstans.DB_TABLE_MEETING.NAME.toString()))
 			.addData(BolePoServerConstans.GCM_DATA.MEETING_DATE.toString(), (String) meeting.getProperty(BolePoServerConstans.DB_TABLE_MEETING.DATE.toString()))
 			.addData(BolePoServerConstans.GCM_DATA.MEETING_TIME.toString(), (String) meeting.getProperty(BolePoServerConstans.DB_TABLE_MEETING.TIME.toString()))
@@ -328,14 +333,6 @@ public class MeetingsServlet extends HttpServlet {
 		mDatastore.put(user);
 	}
 
-	private void printStatusToResponse(PrintWriter out, MeetingsServletStatus status) {
-		out.println("<Status>");
-		out.println("<Action>" + status.getAction() + "</Action>");
-		out.println("<State>" + status.getState() + "</State>");
-		out.println("<Desc>" + status.getDescription() + "</Desc>");
-		out.println("</Status>");
-	}
-
 	private void printNotificationResultsToResponse(PrintWriter out, int[] notificationResults) {
 		out.println("<Delivered>" + notificationResults[0] +  "</Delivered>");
 		out.println("<FailDelivered>" + notificationResults[1] +  "</FailDelivered>");
@@ -356,7 +353,7 @@ public class MeetingsServlet extends HttpServlet {
 		String sharelocationtime = null;
 		String participantsnumber = null;
 
-		MeetingsServletStatus.Builder statusBuilder = new MeetingsServletStatus.Builder();
+		ServletStatus.Builder statusBuilder = new ServletStatus.Builder();
 
 		/* preparing the response in XML format */
 		resp.setContentType("text/xml");
@@ -369,7 +366,7 @@ public class MeetingsServlet extends HttpServlet {
 			action = BolePoServerConstans.ACTION.getEnum(req.getParameter("action"));
 		}
 		catch (IllegalArgumentException e) {
-			printStatusToResponse(out, statusBuilder.setState("error").setDescription("unknown action: " + req.getParameter("action")).build());
+			BolePoServerMisc.printStatusToResponse(out, statusBuilder.setState("error").setDescription("unknown action: " + req.getParameter("action")).build());
 			out.println("</Response>");
 			return;
 		}
@@ -394,7 +391,7 @@ public class MeetingsServlet extends HttpServlet {
 			}
 		} catch (NumberFormatException e) {
 			/* the parameter for the number of participants doesn't contain a parsable integer */
-			printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("error").setDescription("participantsnumber is not numeric").build());
+			BolePoServerMisc.printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("error").setDescription("participantsnumber is not numeric").build());
 			out.println("</Response>");
 			return;
 		}			
@@ -406,7 +403,7 @@ public class MeetingsServlet extends HttpServlet {
 
 			/* checking if one of the parameters is missing and if so exiting with informative status */
 			if (actionmakerphone == null || name == null || date == null || time == null || location == null || sharelocationtime == null) {
-				printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("Error").setDescription("one or more parameters are missing").build());
+				BolePoServerMisc.printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("Error").setDescription("one or more parameters are missing").build());
 				break;
 			}
 
@@ -433,7 +430,7 @@ public class MeetingsServlet extends HttpServlet {
 			/* storing the participants data in the server's data-base */
 			storeParticipants(participantsList);
 
-			printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("OK").build());
+			BolePoServerMisc.printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("OK").build());
 
 			/* sending back the hash calculated on the meeting's details to be used later to check
 			 * integrity of the meeting in actions like retrieve, edit and delete */
@@ -461,17 +458,19 @@ public class MeetingsServlet extends HttpServlet {
 		case MODIFY:
 
 			/* checking whether the requester has the right credentials to modify the meeting's details */
-			if (hasModifyingCredentials(actionmakerphone, hashval)) {
-				
-				/* creating Query instance on the meetings table and filtering the entities only to the entity with the hash value as received in the parameters */
-				Query modifyQry = new Query(BolePoServerConstans.DB_TABLE_MEETING.TABLE_NAME.toString()).setFilter(meetingEqualHashFilter);
+			//			if (hasModifyingCredentials(actionmakerphone, hashval)) {
 
-				/* running the query in the datastore */
-				PreparedQuery pq = mDatastore.prepare(modifyQry);
+			/* creating Query instance on the meetings table and filtering the entities only to the entity with the hash value as received in the parameters */
+			Query modifyQry = new Query(BolePoServerConstans.DB_TABLE_MEETING.TABLE_NAME.toString()).setFilter(meetingEqualHashFilter);
 
-				/* getting the one and only result from datastore */
-				Entity meeting = pq.asSingleEntity();
+			/* running the query in the datastore */
+			PreparedQuery pq = mDatastore.prepare(modifyQry);
 
+			/* getting the one and only result from datastore */
+			Entity meeting = pq.asSingleEntity();
+
+			/* checking if there is a meeting associated with the given hash value */
+			if (meeting != null) {
 				/* creating new meeting instance with the modified details and getting back the modified meeting entity */
 				Entity modifiedMeeting = modifyAndSave(meeting, actionmakerphone, name, date, time, location, participantsPhones, sharelocationtime);
 
@@ -491,32 +490,49 @@ public class MeetingsServlet extends HttpServlet {
 								.build());
 					else participantsList.add(participantBuilder.build());
 				}
-				
+
 				List<String> oldParticipants = updateParticipants(modifiedMeeting.getKey(), participantsList);
-				
+
 				/* setting the request status to be OK */
-				printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("OK").build());
+				BolePoServerMisc.printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("OK").build());
 
 				/* sending back the hash calculated on the meeting's details to be used later to check
 				 * integrity of the meeting in actions like retrieve, edit and delete */
 				out.println("<Meeting>");
 				out.println("<Hash>" + modifiedMeeting.getProperty(BolePoServerConstans.DB_TABLE_MEETING.HASH.toString()) + "</Hash>");
+				out.println("<Participants>");
+				for (Participant p : participantsList) {
+					out.println("<Participant>");
+					out.println("<Phone>" + p.getPhone() + "</Phone>");
+					out.println("<Name>" + p.getName() + "</Name>");
+					out.println("<RSVP>" + p.getRSVP() + "</RSVP>");
+					out.println("<Credentials>" + p.getCredentials() + "</Credentials>");
+					out.println("<PHash>" + p.getHash() + "</PHash>");
+					out.println("</Participant>");
+				}
+				out.println("</Participants>");
 				out.println("</Meeting>");
 
 				notificationResults = notifyParticipants(BolePoServerConstans.GCM_NOTIFICATION.UPDATED_MEETING,
 						participantsList,
 						(String) modifiedMeeting.getProperty(BolePoServerConstans.DB_TABLE_MEETING.HASH.toString()));
-				
+
 				int[] removedParticipantsNotificationResults = notifyParticipants(BolePoServerConstans.GCM_NOTIFICATION.REMOVED_FROM_MEETING,
 						participantsList,
 						(String) modifiedMeeting.getProperty(BolePoServerConstans.DB_TABLE_MEETING.HASH.toString()));
-				
+
 				printNotificationResultsToResponse(out, notificationResults);
 			}
+			/* query for a meeting with the given hash ended with no results.
+			 * the meaning of this is that there is no such a meeting, hence there's nothing to modify */
 			else {
-				/* the user doesn't has the right credentials to modify the meeting */
-				printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("Error").setDescription("no permission to modify the meeting").build());
+				BolePoServerMisc.printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("Error").setDescription("no such a meeting - " + hashval).build());
 			}
+			//			}
+			//			else {
+			//				/* the user doesn't has the right credentials to modify the meeting */
+			//				printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("Error").setDescription("no permission to modify the meeting").build());
+			//			}
 			//TODO notify about modifying meeting's details
 			break;
 		case REMOVE:
@@ -533,33 +549,33 @@ public class MeetingsServlet extends HttpServlet {
 			if (meetingToRemove != null) {
 
 				/* checking whether the requester has the right credentials to modify the meeting's details */
-				if (hasModifyingCredentials(actionmakerphone, hashval)) {
+				//				if (hasModifyingCredentials(actionmakerphone, hashval)) {
 
-					Filter participantEqualMeetingKeyFilter = new FilterPredicate(BolePoServerConstans.DB_TABLE_PARTICIPANT.MEETING_KEY.toString(),
-							FilterOperator.EQUAL,
-							meetingToRemove.getKey());
+				Filter participantEqualMeetingKeyFilter = new FilterPredicate(BolePoServerConstans.DB_TABLE_PARTICIPANT.MEETING_KEY.toString(),
+						FilterOperator.EQUAL,
+						meetingToRemove.getKey());
 
-					Query deletedParticipantsQry = new Query(BolePoServerConstans.DB_TABLE_PARTICIPANT.TABLE_NAME.toString()).setFilter(participantEqualMeetingKeyFilter);
-					deleteResults = mDatastore.prepare(deletedParticipantsQry);
-					List<Entity> participantsToDelete = deleteResults.asList(FetchOptions.Builder.withLimit(1));
-					/* removing participants */
-					for (Entity e : participantsToDelete)
-						mDatastore.delete(e.getKey());
+				Query deletedParticipantsQry = new Query(BolePoServerConstans.DB_TABLE_PARTICIPANT.TABLE_NAME.toString()).setFilter(participantEqualMeetingKeyFilter);
+				deleteResults = mDatastore.prepare(deletedParticipantsQry);
+				List<Entity> participantsToDelete = deleteResults.asList(FetchOptions.Builder.withLimit(1));
+				/* removing participants */
+				for (Entity e : participantsToDelete)
+					mDatastore.delete(e.getKey());
 
-					/* removing entire meeting */
-					mDatastore.delete(meetingToRemove.getKey());
+				/* removing entire meeting */
+				mDatastore.delete(meetingToRemove.getKey());
 
-					/* setting the request status to be OK */
-					printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("OK").build());
-				}
-				else {
-					/* user doesn't has credentials to perform delete */
-					printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("Error").setDescription("no credentials").build());
-				}
+				/* setting the request status to be OK */
+				BolePoServerMisc.printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("OK").build());
+				//				}
+				//				else {
+				//					/* user doesn't has credentials to perform delete */
+				//					printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("Error").setDescription("no credentials").build());
+				//				}
 			}
 			else {
 				/* no meeting corresponds to the given hash */
-				printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("Error").setDescription("no such a meeting - " + hashval).build());
+				BolePoServerMisc.printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("Error").setDescription("no such a meeting - " + hashval).build());
 			}
 			//TODO notify about delete
 			break;
@@ -582,7 +598,7 @@ public class MeetingsServlet extends HttpServlet {
 
 
 					/* setting the request status to be OK */
-					printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("OK").build());
+					BolePoServerMisc.printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("OK").build());
 
 					/* filling the meeting details */
 					out.println("<Meeting>");

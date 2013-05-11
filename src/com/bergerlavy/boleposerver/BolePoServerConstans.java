@@ -11,7 +11,10 @@ public class BolePoServerConstans {
 		REMOVE ("remove"),
 		RETRIEVE ("retrieve"),
 		ATTEND ("attend"),
-		UNATTEND ("unattend");
+		UNATTEND ("unattend"),
+		GCM_REGISTRATION ("gcm_register"),
+		GCM_UNREGISTRATION ("gcm_unregister"),
+		GCM_CHECK_REGISTRATION ("gcm_check_registration");
 		
 		private final String mStr;
 		
@@ -63,6 +66,13 @@ public class BolePoServerConstans {
 		@Override
 		public String toString() {
 			return mStr;
+		}
+		
+		public static CREDENTIALS getEnum(String str) {
+			for (CREDENTIALS c : values())
+				if (c.toString().equalsIgnoreCase(str))
+					return c;
+			throw new IllegalArgumentException();
 		}
 	}
 	
