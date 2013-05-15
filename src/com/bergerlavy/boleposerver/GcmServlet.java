@@ -149,11 +149,11 @@ public class GcmServlet extends HttpServlet {
 					Query qry = new Query(BolePoServerConstans.DB_TABLE_USER.TABLE_NAME.toString()).setFilter(userFilter);
 					PreparedQuery result = mDatastore.prepare(qry);
 					Entity user = result.asSingleEntity();
-
-					out.println("<Contact>");
-					if (user != null)
+					if (user != null) {
+						out.println("<Contact>");
 						out.println("<Phone>" + contact + "</Phone>");
-					out.write("</Contact>");
+						out.write("</Contact>");
+					}
 				}
 			}
 			BolePoServerMisc.printStatusToResponse(out, statusBuilder

@@ -141,11 +141,12 @@ public class MeetingsServlet extends HttpServlet {
 			/* if the participant is new to the meeting, than adding it */
 			if (!exists) {
 				Entity entity = new Entity(BolePoServerConstans.DB_TABLE_PARTICIPANT.TABLE_NAME.toString());
+				entity.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.MEETING_KEY.toString(), meetingKey);
 				entity.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.PHONE.toString(), p.getPhone());
 				entity.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.NAME.toString(), p.getName());
 				entity.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.CREDENTIALS.toString(), p.getCredentials());
 				entity.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.RSVP.toString(), p.getRSVP());
-				entity.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.HASH.toString(), p.getHash());
+				entity.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.HASH.toString(), Hasher.participantHashGenerator(p));
 				mDatastore.put(entity);
 			}
 		}
@@ -230,10 +231,13 @@ public class MeetingsServlet extends HttpServlet {
 		return values;
 	}
 
-	private int[] notifyParticipants(BolePoServerConstans.GCM_NOTIFICATION gcmNotification, List<Participant> participants, String meetingHash) {
+	private int[] notifyParticipants(String actionMakerPhone, BolePoServerConstans.GCM_NOTIFICATION gcmNotification, List<Participant> participants, String meetingHash) {
 		List<String> gcmIds = new ArrayList<String>();
 		for (Participant p : participants) {
-
+			/* not notifying the action maker about the action he did */
+			if (p.getPhone().equals(actionMakerPhone))
+				continue;
+			
 			/* filtering to get the entity of the user with the given phone number */
 			Filter usrFilter = new FilterPredicate(BolePoServerConstans.DB_TABLE_USER.PHONE.toString(), Query.FilterOperator.EQUAL, p.getPhone());
 
@@ -449,7 +453,7 @@ public class MeetingsServlet extends HttpServlet {
 			out.println("</Participants>");
 			out.println("</Meeting>");
 
-			int notificationResults[] = notifyParticipants(BolePoServerConstans.GCM_NOTIFICATION.NEW_MEETING, participantsList, mHash);
+			int notificationResults[] = notifyParticipants(actionmakerphone, BolePoServerConstans.GCM_NOTIFICATION.NEW_MEETING, participantsList, mHash);
 			printNotificationResultsToResponse(out, notificationResults);
 
 			//TODO is this line necessary ??
@@ -513,11 +517,11 @@ public class MeetingsServlet extends HttpServlet {
 				out.println("</Participants>");
 				out.println("</Meeting>");
 
-				notificationResults = notifyParticipants(BolePoServerConstans.GCM_NOTIFICATION.UPDATED_MEETING,
+				notificationResults = notifyParticipants(actionmakerphone, BolePoServerConstans.GCM_NOTIFICATION.UPDATED_MEETING,
 						participantsList,
 						(String) modifiedMeeting.getProperty(BolePoServerConstans.DB_TABLE_MEETING.HASH.toString()));
 
-				int[] removedParticipantsNotificationResults = notifyParticipants(BolePoServerConstans.GCM_NOTIFICATION.REMOVED_FROM_MEETING,
+				int[] removedParticipantsNotificationResults = notifyParticipants(actionmakerphone, BolePoServerConstans.GCM_NOTIFICATION.REMOVED_FROM_MEETING,
 						participantsList,
 						(String) modifiedMeeting.getProperty(BolePoServerConstans.DB_TABLE_MEETING.HASH.toString()));
 
@@ -538,9 +542,6 @@ public class MeetingsServlet extends HttpServlet {
 		case REMOVE:
 			/* looking for a meeting record with hash value equal to the hash value given by the user 
 			 * in the HTTP request */
-
-
-
 			Query deleteQry = new Query(BolePoServerConstans.DB_TABLE_MEETING.TABLE_NAME.toString()).setFilter(meetingEqualHashFilter);
 			PreparedQuery deleteResults = mDatastore.prepare(deleteQry);
 
@@ -557,11 +558,11 @@ public class MeetingsServlet extends HttpServlet {
 
 				Query deletedParticipantsQry = new Query(BolePoServerConstans.DB_TABLE_PARTICIPANT.TABLE_NAME.toString()).setFilter(participantEqualMeetingKeyFilter);
 				deleteResults = mDatastore.prepare(deletedParticipantsQry);
-				List<Entity> participantsToDelete = deleteResults.asList(FetchOptions.Builder.withLimit(1));
-				/* removing participants */
-				for (Entity e : participantsToDelete)
+				
+				/* removing all the participants linked to the meeting */
+				for (Entity e : deleteResults.asIterable())
 					mDatastore.delete(e.getKey());
-
+				
 				/* removing entire meeting */
 				mDatastore.delete(meetingToRemove.getKey());
 
