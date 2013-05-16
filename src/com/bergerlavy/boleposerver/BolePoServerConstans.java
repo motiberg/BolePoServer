@@ -41,7 +41,8 @@ public class BolePoServerConstans {
 		YES ("yes"),
 		NO ("no"),
 		MAYBE ("maybe"),
-		UNKNOWN ("unknown");
+		UNKNOWN ("unknown"),
+		DECLINE ("decline");
 
 		private final String mRsvp;
 
@@ -83,7 +84,8 @@ public class BolePoServerConstans {
 		UPDATED_MEETING ("updated_meeting"),
 		MEETING_CANCLED ("meeting_cancled"),
 		NEW_MANAGER ("new_manager"),
-		REMOVED_FROM_MEETING ("removed_from_meeting");
+		REMOVED_FROM_MEETING ("removed_from_meeting"),
+		PARTICIPANT_ATTENDED ("participant_attended");
 		
 		private final String mStr;
 
@@ -107,7 +109,8 @@ public class BolePoServerConstans {
 		MEETING_SHARE_LOCATION_TIME ("meeting_share_location_time"),
 		MEETING_PARTICIPANTS_COUNT ("meeting_participants_count"),
 		MEETING_HASH ("meeting_hash"),
-		PARTICIPANT_DATA ("participant_data");
+		PARTICIPANT_DATA ("participant_data"),
+		PARTICIPANT_ATTENDANCE ("participant_attends");
 //		PARTICIPANT_PHONE ("participant_phone"),
 //		PARTICIPANT_NAME ("participant_name"),
 //		PARTICIPANT_RSVP ("participant_rsvp"),
