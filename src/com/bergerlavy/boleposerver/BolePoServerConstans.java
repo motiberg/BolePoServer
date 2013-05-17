@@ -113,7 +113,12 @@ public class BolePoServerConstans {
 		PARTICIPANT_DATA ("participant_data"),
 		PARTICIPANT_ATTENDANCE ("participant_attends"),
 		PARTICIPANT_DECLINING ("participant_declining"),
-		REMOVED_BY_MANAGER ("removed_by_manager");
+		REMOVED_BY_MANAGER ("removed_by_manager"),
+		NEW_MANAGER_NEW_HASH ("new_manager_hash"),
+		NEW_MANAGER_OLD_HASH ("new_manager_old_hash"),
+		OLD_MANAGER_NEW_HASH ("old_manager_hash"),
+		OLD_MANAGER_OLD_HASH ("old_manager_old_hash"),
+		OLD_MEETING_HASH ("old_meeting_hash");
 //		PARTICIPANT_PHONE ("participant_phone"),
 //		PARTICIPANT_NAME ("participant_name"),
 //		PARTICIPANT_RSVP ("participant_rsvp"),

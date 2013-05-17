@@ -37,8 +37,22 @@ import com.google.appengine.api.datastore.Query.FilterPredicate;
 public class MeetingsServlet extends HttpServlet {
 
 	private DatastoreService mDatastore;
-	private String mHash;
+	
+	/**
+	 * GLOBAL VARIABLE:
+	 * The hash of the meeting that it's manager has been replaced. This value is the hash of the meeting prior to the
+	 * replacement. This data will be sent to the new meeting's manager, so that the meeting could be located in his
+	 * application's data-base in order to apply the changes (Meeting has new manager and as a result a new hash)
+	 */
+	private String mPriorToManagerReplacementMeetingHash;
 
+	/**
+	 * GLOBAL VARIABLE:
+	 * The hash of the participant that is going to be the new manager of the meeting. This value is his hash prior to the
+	 * replacement. This data will be sent to the new meeting's manager, so that his record could be located in his
+	 * application's data-base in order to apply changes to it (Participant has new credentials and as a result a new hash)
+	 */
+	private String mPriorToManagerReplacementParticipantHash;
 
 	private boolean hasModifyingCredentials(String participantPhone, String hash) {
 		Filter hashFilter = new FilterPredicate(BolePoServerConstans.DB_TABLE_MEETING.HASH.toString(), FilterOperator.EQUAL, hash);
@@ -112,7 +126,7 @@ public class MeetingsServlet extends HttpServlet {
 			participant.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.NAME.toString(), p.getName());
 			participant.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.RSVP.toString(), p.getRSVP());
 			participant.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.CREDENTIALS.toString(), p.getCredentials());
-			participant.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.HASH.toString(), Hasher.participantHashGenerator(p));
+			participant.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.HASH.toString(), p.getHash());
 			mDatastore.put(participant);
 		}
 	}
@@ -283,11 +297,18 @@ public class MeetingsServlet extends HttpServlet {
 
 		switch (gcmNotification) {
 		case MEETING_CANCLED:
+			messageBuilder.addData(BolePoServerConstans.GCM_DATA.MEETING_NAME.toString(), (String) meeting.getProperty(BolePoServerConstans.DB_TABLE_MEETING.NAME.toString()))
+			.addData(BolePoServerConstans.GCM_DATA.MEETING_MANAGER.toString(), (String) meeting.getProperty(BolePoServerConstans.DB_TABLE_MEETING.MANAGER.toString()))
+			.addData(BolePoServerConstans.GCM_DATA.MEETING_HASH.toString(), (String) meeting.getProperty(BolePoServerConstans.DB_TABLE_MEETING.HASH.toString()));		
 			break;
 		case NEW_MANAGER:
+			messageBuilder.addData(BolePoServerConstans.GCM_DATA.MEETING_NAME.toString(), (String) meeting.getProperty(BolePoServerConstans.DB_TABLE_MEETING.NAME.toString()))
+			.addData(BolePoServerConstans.GCM_DATA.MEETING_HASH.toString(), (String) meeting.getProperty(BolePoServerConstans.DB_TABLE_MEETING.HASH.toString()))
+			.addData(BolePoServerConstans.GCM_DATA.NEW_MANAGER_NEW_HASH.toString(), participants.get(0).getHash())
+			.addData(BolePoServerConstans.GCM_DATA.OLD_MEETING_HASH.toString(), mPriorToManagerReplacementMeetingHash)
+			.addData(BolePoServerConstans.GCM_DATA.NEW_MANAGER_OLD_HASH.toString(), mPriorToManagerReplacementParticipantHash);
 			break;
 		case NEW_MEETING:
-
 			messageBuilder.addData(BolePoServerConstans.GCM_DATA.MEETING_NAME.toString(), (String) meeting.getProperty(BolePoServerConstans.DB_TABLE_MEETING.NAME.toString()))
 			.addData(BolePoServerConstans.GCM_DATA.MEETING_DATE.toString(), (String) meeting.getProperty(BolePoServerConstans.DB_TABLE_MEETING.DATE.toString()))
 			.addData(BolePoServerConstans.GCM_DATA.MEETING_TIME.toString(), (String) meeting.getProperty(BolePoServerConstans.DB_TABLE_MEETING.TIME.toString()))
@@ -320,15 +341,13 @@ public class MeetingsServlet extends HttpServlet {
 			messageBuilder
 			.addData(BolePoServerConstans.GCM_DATA.MEETING_HASH.toString(), (String) meeting.getProperty(BolePoServerConstans.DB_TABLE_MEETING.HASH.toString()))
 			.addData(BolePoServerConstans.GCM_DATA.MEETING_NAME.toString(), (String) meeting.getProperty(BolePoServerConstans.DB_TABLE_MEETING.NAME.toString()));
-			
+
 			//TODO consider sending informative message about the reason that the users have been removed
 			break;
 		default:
 			break;
 		}
-
-
-
+		
 		MulticastResult result = null;
 		try {
 			/* sending the message to the list of users with maximum of 5 tries in case of failure */
@@ -339,6 +358,73 @@ public class MeetingsServlet extends HttpServlet {
 		return new int[] { result.getSuccess(), result.getFailure(), gcmIds.size() };
 	}
 
+	private int[] notifyParticipantsAboutNewManager(String actionMakerPhone, Key meetingKey,
+			List<Participant> participants, String oldManagerOldHash,
+			String oldManagerNewHash, String newManagerOldHash,
+			String newManagerNewHash, String meetingOldHash,
+			String meetingNewHash) {
+		
+		List<String> gcmIds = new ArrayList<String>();
+		for (Participant p : participants) {
+			/* not notifying the action maker about the action he did */
+			if (p.getPhone().equals(actionMakerPhone))
+				continue;
+
+			/* filtering to get the entity of the user with the given phone number */
+			Filter usrFilter = new FilterPredicate(BolePoServerConstans.DB_TABLE_USER.PHONE.toString(), Query.FilterOperator.EQUAL, p.getPhone());
+
+			/* defining the query instance to be on the users table using the filter defined above */
+			Query qry = new Query(BolePoServerConstans.DB_TABLE_USER.TABLE_NAME.toString()).setFilter(usrFilter);
+
+			/* running the query in the datastore */
+			PreparedQuery pq = mDatastore.prepare(qry);
+
+			/* getting the one and only entity result of the query */
+			Entity userEntity = pq.asSingleEntity();
+
+			/* getting the user's GCM ID */
+			String userGcmId = (String) userEntity.getProperty(BolePoServerConstans.DB_TABLE_USER.GCM_ID.toString());
+
+			/* if the user has a GCM ID, then adding it to the list of the users that will be notified for the new meeting */
+			if (userGcmId != null)
+				gcmIds.add(userGcmId);
+			else {
+				/* an invited user does not register to the GCM service */
+				//TODO consider what to do in this case, maybe notifying the manager of the meeting about this
+			}
+
+		}
+
+		Sender sender = new Sender(BolePoServerConstans.GCM_API_KEY);
+
+		/* building the message with pairs of key-value according to the operation performed */
+		Message.Builder messageBuilder = new Message.Builder().addData(BolePoServerConstans.GCM_DATA.MESSAGE_TYPE.toString(), GCM_NOTIFICATION.NEW_MANAGER.toString());
+
+		Filter keyFltr = new FilterPredicate(Entity.KEY_RESERVED_PROPERTY, FilterOperator.EQUAL, meetingKey);
+		Query qry = new Query(BolePoServerConstans.DB_TABLE_MEETING.TABLE_NAME.toString()).setFilter(keyFltr);
+		PreparedQuery qryResult = mDatastore.prepare(qry);
+		Entity meeting = qryResult.asSingleEntity();
+		if (meeting == null)
+			return new int[] { -1, -1 ,-1 };
+		
+		messageBuilder.addData(BolePoServerConstans.GCM_DATA.MEETING_NAME.toString(), (String) meeting.getProperty(BolePoServerConstans.DB_TABLE_MEETING.NAME.toString()))
+		.addData(BolePoServerConstans.GCM_DATA.MEETING_HASH.toString(), meetingNewHash)
+		.addData(BolePoServerConstans.GCM_DATA.OLD_MEETING_HASH.toString(), meetingOldHash)
+		.addData(BolePoServerConstans.GCM_DATA.NEW_MANAGER_NEW_HASH.toString(), newManagerNewHash)
+		.addData(BolePoServerConstans.GCM_DATA.NEW_MANAGER_OLD_HASH.toString(), newManagerOldHash)
+		.addData(BolePoServerConstans.GCM_DATA.OLD_MANAGER_NEW_HASH.toString(), oldManagerNewHash)
+		.addData(BolePoServerConstans.GCM_DATA.OLD_MANAGER_OLD_HASH.toString(), oldManagerOldHash);
+		
+		MulticastResult result = null;
+		try {
+			/* sending the message to the list of users with maximum of 5 tries in case of failure */
+			result = sender.send(messageBuilder.build(), gcmIds, 5);
+		} catch (IOException e) {
+			return new int[] { -1, -1, -1 };
+		}
+		return new int[] { result.getSuccess(), result.getFailure(), gcmIds.size() };
+	}
+	
 	private Key getMeetingKeyByMeetingHash(String meetingHash) {
 		Filter hashFltr = new FilterPredicate(BolePoServerConstans.DB_TABLE_MEETING.HASH.toString(), FilterOperator.EQUAL, meetingHash);
 
@@ -380,6 +466,16 @@ public class MeetingsServlet extends HttpServlet {
 		.setRsvp((String) e.getProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.RSVP.toString()))
 		.build();
 	}
+	
+	private List<Participant> getMeetingParticipantsAsList(Key meetingKey) {
+		List<Participant> participants = new ArrayList<Participant>();
+		Filter meetingKeyFilter = new FilterPredicate(BolePoServerConstans.DB_TABLE_PARTICIPANT.MEETING_KEY.toString(), FilterOperator.EQUAL, meetingKey);
+		Query qry = new Query(BolePoServerConstans.DB_TABLE_PARTICIPANT.TABLE_NAME.toString()).setFilter(meetingKeyFilter);
+		PreparedQuery results = mDatastore.prepare(qry);
+		for (Entity e : results.asIterable())
+			participants.add(convertEntityToParticipant(e));
+		return participants;
+	}
 
 	private void storeParticipantAttendingStatus(Entity participant, BolePoServerConstans.RSVP rsvp) {
 		participant.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.RSVP.toString(), rsvp.toString());
@@ -396,7 +492,7 @@ public class MeetingsServlet extends HttpServlet {
 		Filter keyFilter = new FilterPredicate(Entity.KEY_RESERVED_PROPERTY, FilterOperator.EQUAL, meetingKey);
 		Query qry = new Query(BolePoServerConstans.DB_TABLE_MEETING.TABLE_NAME.toString()).setFilter(keyFilter);
 		PreparedQuery result = mDatastore.prepare(qry);
-		return (String) result.asSingleEntity().getProperty(BolePoServerConstans.DB_TABLE_MEETING.HASH.toString());
+		return (String) (result.asSingleEntity().getProperty(BolePoServerConstans.DB_TABLE_MEETING.HASH.toString()));
 	}
 
 	@Override
@@ -471,7 +567,7 @@ public class MeetingsServlet extends HttpServlet {
 
 		switch (action) {
 		case CREATE:
-
+		{
 			/* checking if one of the parameters is missing and if so exiting with informative status */
 			if (actionmakerphone == null || name == null || date == null || time == null || location == null || sharelocationtime == null) {
 				BolePoServerMisc.printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("Error").setDescription("one or more parameters are missing").build());
@@ -490,12 +586,14 @@ public class MeetingsServlet extends HttpServlet {
 
 				/* if this participant is the meeting's creator, then he should has special properties */
 				if (actionmakerphone.equalsIgnoreCase(phone))
-					participantsList.add(participantBuilder
-							.setCredentials(BolePoServerConstans.CREDENTIALS.MANAGER.toString())
-							.setRsvp(BolePoServerConstans.RSVP.YES.toString())
-							.setShareLocationStatus("yes")
-							.build());
-				else participantsList.add(participantBuilder.build());
+					participantBuilder
+					.setCredentials(BolePoServerConstans.CREDENTIALS.MANAGER.toString())
+					.setRsvp(BolePoServerConstans.RSVP.YES.toString())
+					.setShareLocationStatus("yes")
+					.build();
+				Participant p = participantBuilder.build();
+				p.setHash(Hasher.participantHashGenerator(p));
+				participantsList.add(p);
 			}
 
 			/* storing the participants data in the server's data-base */
@@ -524,12 +622,10 @@ public class MeetingsServlet extends HttpServlet {
 
 			int notificationResults[] = notifyParticipants(actionmakerphone, BolePoServerConstans.GCM_NOTIFICATION.NEW_MEETING, participantsList, newMeetingKey);
 			printNotificationResultsToResponse(out, notificationResults);
-
-			//TODO is this line necessary ??
-			mHash = null;
 			break;
+		}
 		case MODIFY:
-
+		{
 			/* checking whether the requester has the right credentials to modify the meeting's details */
 			//			if (hasModifyingCredentials(actionmakerphone, hashval)) {
 
@@ -548,7 +644,7 @@ public class MeetingsServlet extends HttpServlet {
 				Entity modifiedMeeting = modifyAndSave(meeting, actionmakerphone, name, date, time, location, participantsPhones, sharelocationtime);
 
 				/* creating a collection of Participant instances from the data received in the HTTP request */
-				participantsList = new ArrayList<Participant>();
+				List<Participant> participantsList = new ArrayList<Participant>();
 				for (String phone : participantsPhones) {
 
 					/* building base participant */
@@ -586,12 +682,14 @@ public class MeetingsServlet extends HttpServlet {
 				out.println("</Participants>");
 				out.println("</Meeting>");
 
+				int[] notificationResults = null;
+
 				/* notify only if after the modification there are more participants than the meeting manager */
 				if (participantsList.size() > 1) {
 					notificationResults = notifyParticipants(actionmakerphone, BolePoServerConstans.GCM_NOTIFICATION.UPDATED_MEETING,
 							participantsList,
 							modifiedMeeting.getKey());
-					
+
 					printNotificationResultsToResponse(out, notificationResults);
 				}
 
@@ -614,7 +712,9 @@ public class MeetingsServlet extends HttpServlet {
 			//			}
 			//TODO notify about modifying meeting's details
 			break;
+		}
 		case REMOVE:
+		{
 			/* looking for a meeting record with hash value equal to the hash value given by the user 
 			 * in the HTTP request */
 			Query deleteQry = new Query(BolePoServerConstans.DB_TABLE_MEETING.TABLE_NAME.toString()).setFilter(meetingEqualHashFilter);
@@ -627,6 +727,8 @@ public class MeetingsServlet extends HttpServlet {
 				/* checking whether the requester has the right credentials to modify the meeting's details */
 				//				if (hasModifyingCredentials(actionmakerphone, hashval)) {
 
+				List<Participant> removedParticipants = new ArrayList<Participant>();
+
 				Filter participantEqualMeetingKeyFilter = new FilterPredicate(BolePoServerConstans.DB_TABLE_PARTICIPANT.MEETING_KEY.toString(),
 						FilterOperator.EQUAL,
 						meetingToRemove.getKey());
@@ -635,11 +737,17 @@ public class MeetingsServlet extends HttpServlet {
 				deleteResults = mDatastore.prepare(deletedParticipantsQry);
 
 				/* removing all the participants linked to the meeting */
-				for (Entity e : deleteResults.asIterable())
+				for (Entity e : deleteResults.asIterable()) {
+					removedParticipants.add(convertEntityToParticipant(e));
 					mDatastore.delete(e.getKey());
+				}
 
 				/* removing entire meeting */
 				mDatastore.delete(meetingToRemove.getKey());
+
+				/* notifying the participants of the deleted meeting that the meeting has been canceled */
+				int[] notificationResults = notifyParticipants(actionmakerphone, GCM_NOTIFICATION.MEETING_CANCLED, removedParticipants, meetingToRemove.getKey());
+				printNotificationResultsToResponse(out, notificationResults);
 
 				/* setting the request status to be OK */
 				BolePoServerMisc.printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("OK").build());
@@ -655,6 +763,7 @@ public class MeetingsServlet extends HttpServlet {
 			}
 			//TODO notify about delete
 			break;
+		}
 		case RETRIEVE: 
 			Filter hashFilter = new FilterPredicate(BolePoServerConstans.DB_TABLE_MEETING.HASH.toString(),
 					Query.FilterOperator.EQUAL,
@@ -711,11 +820,11 @@ public class MeetingsServlet extends HttpServlet {
 			}
 			break;
 		case ATTEND:
-
+		{
 			/* updating the user RSVP status */
 			storeParticipantAttendingStatus(getParticipantEntityByPhone(actionmakerphone, getMeetingKeyByMeetingHash(hashval)), BolePoServerConstans.RSVP.YES);
 
-			participantsList = new ArrayList<Participant>();
+			List<Participant> participantsList = new ArrayList<Participant>();
 
 			/* getting the key of the meeting by it's hash value */
 			Key AttendedMeetingKey = getMeetingKeyByMeetingHash(hashval);
@@ -732,12 +841,13 @@ public class MeetingsServlet extends HttpServlet {
 			/* setting the request status to be OK */
 			BolePoServerMisc.printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("OK").build());
 			break;
+		}
 		case DECLINE:
-
+		{
 			/* updating the user RSVP status */
 			storeParticipantAttendingStatus(getParticipantEntityByPhone(actionmakerphone, getMeetingKeyByMeetingHash(hashval)), BolePoServerConstans.RSVP.NO);
 
-			participantsList = new ArrayList<Participant>();
+			List<Participant> participantsList = new ArrayList<Participant>();
 
 			/* getting the key of the meeting by it's hash value */
 			Key declinedMeetingKey = getMeetingKeyByMeetingHash(hashval);
@@ -752,7 +862,16 @@ public class MeetingsServlet extends HttpServlet {
 			/* setting the request status to be OK */
 			BolePoServerMisc.printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("OK").build());
 			break;
+		}
 		case REPLACE_MANAGER:
+		{
+			String oldManagerOldHash = null;
+			String oldManagerNewHash = null;
+			String newManagerOldHash = null;
+			String newManagerNewHash = null;
+			String meetingOldHash = null;
+			String meetingNewHash = null;
+			
 			/* filtering the Meeting table by the input hash value */
 			Filter meetingHashFilter = new FilterPredicate(BolePoServerConstans.DB_TABLE_MEETING.HASH.toString(), FilterOperator.EQUAL, meetingHash);
 			Query qry = new Query(BolePoServerConstans.DB_TABLE_MEETING.TABLE_NAME.toString()).setFilter(meetingHashFilter);
@@ -769,6 +888,9 @@ public class MeetingsServlet extends HttpServlet {
 				break;
 			}
 
+			/* saving the hash of the meeting prior to the replacement of it's manager (will result in a new hash to the meeting) */
+			meetingOldHash = (String) m.getProperty(BolePoServerConstans.DB_TABLE_MEETING.HASH.toString());
+			
 			/* filtering the Participant table by the hash value of the going-to-be-replaced meeting's manager */
 			Filter oldParticipantHashFilter = new FilterPredicate(BolePoServerConstans.DB_TABLE_PARTICIPANT.HASH.toString(),
 					FilterOperator.EQUAL,
@@ -786,6 +908,8 @@ public class MeetingsServlet extends HttpServlet {
 				.build());
 				break;
 			}
+			
+			oldManagerOldHash = (String) oldManager.getProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.HASH.toString());
 
 			/* filtering the Participant table by the hash value of the going-to-be meeting's manager */
 			Filter newParticipantHashFilter = new FilterPredicate(BolePoServerConstans.DB_TABLE_PARTICIPANT.HASH.toString(),
@@ -804,36 +928,49 @@ public class MeetingsServlet extends HttpServlet {
 				.build());
 				break;
 			}
+			
+			/* saving the hash of the new participant prior to the replacement (will result in a new hash to the participant due to changes 
+			 * in his credentials */
+			newManagerOldHash = (String) newManager.getProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.HASH.toString());
 
 			/* updating the meeting entity with new manager and as a result - a new hash */
 			m.setProperty(BolePoServerConstans.DB_TABLE_MEETING.MANAGER.toString(), newManager.getProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.PHONE.toString()));
-			String updatedMeetingHash = Hasher.meetingHashGenerator(m);
-			m.setProperty(BolePoServerConstans.DB_TABLE_MEETING.HASH.toString(), updatedMeetingHash);
+			meetingNewHash = Hasher.meetingHashGenerator(m);
+			m.setProperty(BolePoServerConstans.DB_TABLE_MEETING.HASH.toString(), meetingNewHash);
 			mDatastore.put(m);
-			out.println("<MeetingHash>" + updatedMeetingHash + "</MeetingHash>");
+			out.println("<MeetingHash>" + meetingNewHash + "</MeetingHash>");
 
 			/* updating the participant which used to be the meeting' manager with new credentials and as a result - a new hash */
 			oldManager.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.CREDENTIALS.toString(), BolePoServerConstans.CREDENTIALS.REGULAR.toString());
-			String updatedOldManagerHash = Hasher.participantHashGenerator(oldManager);
-			oldManager.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.HASH.toString(), updatedOldManagerHash);
+			oldManagerOldHash = Hasher.participantHashGenerator(oldManager);
+			oldManager.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.HASH.toString(), oldManagerOldHash);
 			mDatastore.put(oldManager);
-			out.println("<OldParticipantHash>" + updatedOldManagerHash + "</OldParticipantHash>");
+			out.println("<OldParticipantHash>" + oldManagerOldHash + "</OldParticipantHash>");
 
 			/* updating the participant which is now the new meeting's manager with new credentials and as a result - a new hash */
 			newManager.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.CREDENTIALS.toString(), BolePoServerConstans.CREDENTIALS.MANAGER.toString());
-			String updatedNewManagerHash = Hasher.participantHashGenerator(newManager);
-			newManager.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.HASH.toString(), updatedNewManagerHash);
+			newManagerNewHash = Hasher.participantHashGenerator(newManager);
+			newManager.setProperty(BolePoServerConstans.DB_TABLE_PARTICIPANT.HASH.toString(), newManagerNewHash);
 			mDatastore.put(newManager);
-			out.println("<NewParticipantHash>" + updatedNewManagerHash + "</NewParticipantHash>");
+			out.println("<NewParticipantHash>" + newManagerNewHash + "</NewParticipantHash>");
 
+			/* preparing the list of participants to be noticed about this action */
+			List<Participant> participantsList = getMeetingParticipantsAsList(m.getKey());
+
+			/* notifying the new manager about his promotion */
+			int[] notificationResults = notifyParticipantsAboutNewManager(actionmakerphone, m.getKey(), participantsList, oldManagerOldHash, oldManagerNewHash, newManagerOldHash, newManagerNewHash, meetingOldHash, meetingNewHash);
+			printNotificationResultsToResponse(out, notificationResults);
+			
 			/* setting the request status to be OK */
 			BolePoServerMisc.printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("OK").build());
 			break;
+		}
 		case REMOVE_PARTICIPANT:
+		{
 			/* searching for participant with hash value as received as input */
 			Filter participantHashFilter = new FilterPredicate(BolePoServerConstans.DB_TABLE_PARTICIPANT.HASH.toString(), FilterOperator.EQUAL, participantHash);
-			qry = new Query(BolePoServerConstans.DB_TABLE_PARTICIPANT.TABLE_NAME.toString()).setFilter(participantHashFilter);
-			result = mDatastore.prepare(qry);
+			Query qry = new Query(BolePoServerConstans.DB_TABLE_PARTICIPANT.TABLE_NAME.toString()).setFilter(participantHashFilter);
+			PreparedQuery result = mDatastore.prepare(qry);
 			Entity participantToRemove = result.asSingleEntity();
 
 			/* checking if the query didn't succeed. i.e. there isn't a participant with this value */
@@ -853,6 +990,7 @@ public class MeetingsServlet extends HttpServlet {
 				BolePoServerMisc.printStatusToResponse(out, statusBuilder.setAction(action.toString()).setState("OK").build());
 			}
 			break;
+		}
 		default:
 			break;
 		}
