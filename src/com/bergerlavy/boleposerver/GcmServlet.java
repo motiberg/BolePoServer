@@ -49,7 +49,7 @@ public class GcmServlet extends HttpServlet {
 		}
 		catch (IllegalArgumentException e) {
 			BolePoServerMisc.printStatusToResponse(out, statusBuilder
-					.setState("error")
+					.failure(BolePoServerConstans.FAILURE_CODE_UNKNOWN_ACTION)
 					.setDescription("unknown action: " + req.getParameter("action"))
 					.build());
 			out.println("</GcmResponse>");
@@ -84,12 +84,11 @@ public class GcmServlet extends HttpServlet {
 				mDatastore.put(user);
 				BolePoServerMisc.printStatusToResponse(out, statusBuilder
 						.setAction(action.toString())
-						.setState("OK")
 						.build());
 			}
 			else {
 				BolePoServerMisc.printStatusToResponse(out, statusBuilder
-						.setState("error")
+						.failure(BolePoServerConstans.FAILURE_CODE_INVALID_PARAMETERS_COUNT)
 						.setDescription("username or regid is null")
 						.build());
 			}
@@ -108,13 +107,12 @@ public class GcmServlet extends HttpServlet {
 					mDatastore.delete(usr.getKey());	
 					BolePoServerMisc.printStatusToResponse(out, statusBuilder
 							.setAction(action.toString())
-							.setState("OK")
 							.build());
 				}
 			}
 			else {
 				BolePoServerMisc.printStatusToResponse(out, statusBuilder
-						.setState("error")
+						.failure(BolePoServerConstans.FAILURE_CODE_INVALID_PARAMETERS_COUNT)
 						.setDescription("username or regid is null")
 						.build());
 			}
@@ -126,7 +124,7 @@ public class GcmServlet extends HttpServlet {
 			catch (NumberFormatException e) {
 				BolePoServerMisc.printStatusToResponse(out, statusBuilder
 						.setAction(action.toString())
-						.setState("error")
+						.failure(BolePoServerConstans.FAILURE_CODE_PARAMETER_PARTICIPANTS_NUMBER_ISNT_NUMERIC)
 						.setDescription("participantsnumber is not numeric")
 						.build());
 				break;
@@ -136,7 +134,7 @@ public class GcmServlet extends HttpServlet {
 				if (contact == null) {
 					BolePoServerMisc.printStatusToResponse(out, statusBuilder
 							.setAction(action.toString())
-							.setState("error")
+							.failure(BolePoServerConstans.FAILURE_CODE_CONTACT_PHONE_IS_MISSING)
 							.setDescription("contact (" + i + " out of " + contactsCount + ") phone is missing")
 							.build());
 					break;
@@ -158,11 +156,10 @@ public class GcmServlet extends HttpServlet {
 			}
 			BolePoServerMisc.printStatusToResponse(out, statusBuilder
 					.setAction(action.toString())
-					.setState("OK")
 					.build());
 			break;
 		default:
-			BolePoServerMisc.printStatusToResponse(out, statusBuilder.setState("error")
+			BolePoServerMisc.printStatusToResponse(out, statusBuilder.failure(BolePoServerConstans.FAILURE_CODE_UNKNOWN_ACTION)
 					.setDescription("unknown action")
 					.build());
 		}

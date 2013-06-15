@@ -2,18 +2,14 @@ package com.bergerlavy.boleposerver;
 
 public class ServletStatus {
 
-	private String mState;
 	private String mAction;
 	private String mDescription;
+	private int mFailureCode;
 	
 	private ServletStatus(Builder builder) {
-		mState = builder.state;
 		mAction = builder.action;
 		mDescription = builder.description;
-	}
-	
-	public String getState() {
-		return mState;
+		mFailureCode = builder.failureCode;
 	}
 	
 	public String getAction() {
@@ -24,16 +20,21 @@ public class ServletStatus {
 		return mDescription;
 	}
 	
+	public int getFailureCode() {
+		return mFailureCode;
+	}
+	
 	public static class Builder {
 		
 		/* Optional */
-		private String state;
 		private String action;
 		private String description;
 		
-		public Builder setState(String state) {
-			if (state != null)
-				this.state = state;
+		/* hidden */
+		private int failureCode = 0;
+		
+		public Builder failure(int failureCode) {
+			this.failureCode = failureCode;
 			return this;
 		}
 		
